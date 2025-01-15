@@ -1,0 +1,66 @@
+services:
+
+  traefik:
+    image: "traefik:v3.3"
+    container_name: "traefik"
+    networks:
+      - traefik
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./volumes/letsencrypt:/letsencrypt
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    environment:
+      - CF_API_EMAIL=${CF_API_EMAIL}
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+    command:
+      - "--accesslog=true"
+      - "--api.dashboard=true"
+      - "--log.level=DEBUG"
+      # Docker configuration
+      - "--providers.docker=true"
+      - "--providers.docker.watch=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=traefik"
+      # Configure entrypoint
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # SSL configuration
+      - "--certificatesresolvers.letsencryptresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencryptresolver.acme.httpchallenge.entrypoint=web"
+      # - "--certificatesresolvers.letsencryptresolver.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory"
+      - "--certificatesresolvers.letsencryptresolver.acme.email=thibaut.raphael@protonmail.com"
+      - "--certificatesresolvers.letsencryptresolver.acme.storage=/letsencrypt/acme.json"
+      # Global HTTP -> HTTPS
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencryptresolver"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      # - "traefik.http.routers.dashboard.middlewares=dashboard-auth"
+      # - "traefik.http.middlewares.dashboard-auth.basicauth.usersfile=/users/users.u"
+      - "traefik.http.routers.dashboard.rule=Host(`traefikCLO901.musubi.dev`)"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=8080"
+    restart: unless-stopped
+
+  whoami:
+    image: traefik/whoami:latest
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.entrypoints=websecure"
+      - "traefik.http.routers.whoami.rule=Host(`appclo901.musubi.dev`)" # change hostname!
+      - "traefik.http.routers.whoami.tls=true"
+      - "traefik.http.routers.whoami.tls.certresolver=letsencryptresolver"
+      # - "traefik.http.routers.whoami.middlewares=secHeaders@file"
+      - "traefik.http.services.whoami.loadbalancer.server.port=80" # set port the container listenes to
+    networks:
+      - traefik
+
+networks:
+  traefik:
+    external: true
+    name: traefik
